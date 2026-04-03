@@ -143,11 +143,15 @@ For hook: one sentence capturing what the script is really about."""
 
 #writes to new database with enriched metadata. Creates a new page in the destination database with the title, content, and extracted metadata (date, themes, mood, hook) as properties. Truncates the script content to 2000 characters to fit Notion's limits.
 def write_to_new_database(database_id: str, title: str, content: str, enriched: dict):
+    date = enriched.get("date")
+    if date and not re.match(r"\d{4}-\d{2}-\d{2}", str(date)):
+        date = None
+
     notion.pages.create(
         parent={"database_id": database_id},
         properties={
             "Title": {"title": [{"text": {"content": title}}]},
-            "Date": {"date": {"start": enriched["date"]} if enriched["date"] else None},
+            "Date": {"date": {"start": date} if date else None},
             "Themes": {"multi_select": [{"name": t} for t in enriched["themes"]]},
             "Mood": {"select": {"name": enriched["mood"]}},
             "Hook": {"rich_text": [{"text": {"content": enriched["hook"]}}]},
@@ -156,11 +160,11 @@ def write_to_new_database(database_id: str, title: str, content: str, enriched: 
     )
 
 if __name__ == "__main__":
-    # dest_db = os.getenv("NOTION_DEST_DATABASE_ID")
-    # setup_database_properties(dest_db)
-    # scripts = get_scripts()
-    # first = scripts[0]
-    # content = get_page_content(first["id"])
-    # enriched = enrich_script(first["title"], content)
-    # write_to_new_database(dest_db, first["title"], content, enriched)
-    # print(f"Wrote {first['title']}")
+    dest_db = os.getenv("NOTION_DEST_DATABASE_ID")
+    scripts = get_scripts()
+    
+    for script in scripts:
+        content = get_page_content(script["id"])
+        enriched = enrich_script(script["title"], content)
+        write_to_new_database(dest_db, script["title"], content, enriched)
+        print(f"Migrated {script['title']}")
