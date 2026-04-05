@@ -28,6 +28,7 @@ def init_db():
             role TEXT NOT NULL,
             content TEXT NOT NULL,
             timestamp TEXT NOT NULL,
+            compressed INTEGER DEFAULT 0,
             FOREIGN KEY (session_id) REFERENCES sessions(id)
         )
     """)
@@ -38,17 +39,6 @@ def init_db():
             content TEXT NOT NULL,
             timestamp TEXT NOT NULL,
             FOREIGN KEY (session_id) REFERENCES sessions(id)
-        )
-    """)
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        session_id INTEGER NOT NULL,
-        role TEXT NOT NULL,
-        content TEXT NOT NULL,
-        timestamp TEXT NOT NULL,
-        compressed INTEGER DEFAULT 0,
-        FOREIGN KEY (session_id) REFERENCES sessions(id)
         )
     """)
     conn.commit()
@@ -171,7 +161,7 @@ def compress_old_messages(session_id: int):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT id, role, content FROM messages WHERE session_id = ? ORDER BY id ASC LIMIT 20",
+        "SELECT id, role, content FROM messages WHERE session_id = ? AND compressed = 0 ORDER BY id ASC LIMIT 20",
         (session_id,)
     )
     rows = cursor.fetchall()
@@ -209,13 +199,12 @@ Write in third person as context for a future conversation."""
     )
     ids = [row[0] for row in rows]
     cursor.execute(
-        f"DELETE FROM messages WHERE id IN ({','.join('?' * len(ids))})", ids
+        f"UPDATE messages SET compressed = 1 WHERE id IN ({','.join('?' * len(ids))})", ids
     )
     conn.commit()
     conn.close()
 
 def get_history(session_id: int) -> list:
-    # get latest compression summary for this session
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute(
@@ -226,7 +215,7 @@ def get_history(session_id: int) -> list:
     summary = row[0] if row else None
 
     cursor.execute(
-        "SELECT role, content FROM messages WHERE session_id = ? ORDER BY id ASC",
+        "SELECT role, content FROM messages WHERE session_id = ? AND compressed = 0 ORDER BY id ASC",
         (session_id,)
     )
     messages = [{"role": r[0], "content": r[1]} for r in cursor.fetchall()]
@@ -236,9 +225,20 @@ def get_history(session_id: int) -> list:
         return messages
 
     return [
-        {"role": "user", "content": f"[Context from earlier in this conversation: {summary}]"},
+        {"role": "user", "content": f"[Context from earlier: {summary}]"},
         {"role": "assistant", "content": "I have that context, thank you."}
     ] + messages
+
+def get_session_messages(session_id: int) -> list:
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT role, content, timestamp FROM messages WHERE session_id = ? ORDER BY id ASC",
+        (session_id,)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [{"role": r[0], "content": r[1], "timestamp": r[2]} for r in rows]
 
 def get_session_list() -> list:
     conn = sqlite3.connect(DB_PATH)
@@ -254,17 +254,6 @@ def get_session_list() -> list:
         "date": row[1],
         "summary": row[2] or "no summary yet"
     } for row in rows]
-
-def get_session_messages(session_id: int) -> list:
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT role, content, timestamp FROM messages WHERE session_id = ? ORDER BY id ASC",
-        (session_id,)
-    )
-    rows = cursor.fetchall()
-    conn.close()
-    return [{"role": r[0], "content": r[1], "timestamp": r[2]} for r in rows]
 
 def clear_history():
     conn = sqlite3.connect(DB_PATH)
