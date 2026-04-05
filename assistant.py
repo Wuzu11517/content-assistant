@@ -199,6 +199,10 @@ def update_page(title: str, fields: dict) -> str:
     if "mood" in fields:
         mood = fields["mood"].split(",")[0].strip()
         properties["Mood"] = {"select": {"name": mood}}
+    if "date" in fields:
+        properties["Date"] = {"date": {"start": fields["date"]} if fields["date"] else None}
+    if "title" in fields:
+        properties["Title"] = {"title": [{"text": {"content": fields["title"]}}]}
 
     notion.pages.update(page_id=match["id"], properties=properties)
     
