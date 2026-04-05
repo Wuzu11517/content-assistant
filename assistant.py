@@ -30,9 +30,23 @@ def get_script_summaries() -> list:
 
     return summaries
 
-def get_full_script(page_id: str) -> str:
-    props = notion.pages.retrieve(page_id=page_id)["properties"]
-    return props["Script"]["rich_text"][0]["plain_text"] if props["Script"]["rich_text"] else ""
+def get_full_script(page_id: str, source: str = "blocks") -> str:
+    if source == "property":
+        props = notion.pages.retrieve(page_id=page_id)["properties"]
+        rich_text = props.get("Script", {}).get("rich_text", [])
+        return "".join([block["plain_text"] for block in rich_text])
+    
+    # default: read page body blocks
+    blocks = notion.blocks.children.list(block_id=page_id)
+    content = ""
+    for block in blocks["results"]:
+        block_type = block["type"]
+        if block_type in ["paragraph", "heading_1", "heading_2", "heading_3", "bulleted_list_item", "numbered_list_item"]:
+            rich_text = block[block_type].get("rich_text", [])
+            for text in rich_text:
+                content += text["plain_text"]
+            content += "\n"
+    return content.strip()
 
 def inspire():
     summaries = get_script_summaries()
@@ -152,4 +166,57 @@ Return only the refined script, nothing else."""
     
     return response.content[0].text
 
-if __name__ == "__main__":
+def read_page(title: str, source: str = "blocks") -> str:
+    summaries = get_script_summaries()
+    match = next((s for s in summaries if s["title"].lower() == title.lower()), None)
+    
+    if not match:
+        return f"Could not find a page titled '{title}'"
+    
+    content = get_full_script(match["id"], source)
+    
+    return f"""Title: {match['title']}
+Hook: {match['hook'] or 'empty'}
+Themes: {', '.join(match['themes']) if match['themes'] else 'empty'}
+Mood: {match['mood'] or 'empty'}
+Script: {content or 'empty'}"""
+
+def update_page(title: str, fields: dict) -> str:
+    summaries = get_script_summaries()
+    match = next((s for s in summaries if s["title"].lower() == title.lower()), None)
+    
+    if not match:
+        return f"Could not find a page titled '{title}'"
+    
+    properties = {}
+    
+    if "script" in fields:
+        properties["Script"] = {"rich_text": [{"text": {"content": fields["script"][:2000]}}]}
+    if "hook" in fields:
+        properties["Hook"] = {"rich_text": [{"text": {"content": fields["hook"]}}]}
+    if "themes" in fields:
+        properties["Themes"] = {"multi_select": [{"name": t} for t in fields["themes"]]}
+    if "mood" in fields:
+        mood = fields["mood"].split(",")[0].strip()
+        properties["Mood"] = {"select": {"name": mood}}
+
+    notion.pages.update(page_id=match["id"], properties=properties)
+    
+    updated = ", ".join(fields.keys())
+    return f"Updated {title} — {updated}"
+
+def create_page(title: str, script: str) -> str:
+    enriched = enrich_script(title, script)
+    
+    notion.pages.create(
+        parent={"database_id": os.getenv("NOTION_DEST_DATABASE_ID")},
+        properties={
+            "Title": {"title": [{"text": {"content": title}}]},
+            "Hook": {"rich_text": [{"text": {"content": enriched["hook"]}}]},
+            "Themes": {"multi_select": [{"name": t} for t in enriched["themes"]]},
+            "Mood": {"select": {"name": enriched["mood"]}},
+            "Script": {"rich_text": [{"text": {"content": script[:2000]}}]}
+        }
+    )
+    
+    return f"Created {title} with hook, themes, and mood auto-generated"
