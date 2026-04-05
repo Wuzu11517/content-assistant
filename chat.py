@@ -86,7 +86,7 @@ tools = [
     },
     {
         "name": "update_page",
-        "description": "Updates any combination of fields on a specific page. Use when the user wants to change the script, hook, themes, mood, or any combination of them.",
+        "description": "Updates any combination of fields on a specific page. Fields can include: script (string), hook (string), themes (array of strings), mood (string), date (ISO format string e.g. '2026-04-04'), title (string).",
         "input_schema": {
             "type": "object",
             "properties": {
