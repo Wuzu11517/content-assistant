@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>your space</title>
+    <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #f5f0e8;
+            --bg-deep: #ede6d6;
+            --surface: #faf7f2;
+            --border: #e0d9cc;
+            --text: #2c2416;
+            --text-soft: #7a6e5f;
+            --accent: #c17f4a;
+            --accent-soft: #e8d5bc;
+            --user-bubble: #2c2416;
+            --user-text: #f5f0e8;
+            --sidebar-width: 260px;
+        }
+
+        body {
+            background: var(--bg);
+            font-family: 'DM Sans', sans-serif;
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+            background-image:
+                radial-gradient(ellipse at 20% 50%, rgba(193,127,74,0.06) 0%, transparent 60%),
+                radial-gradient(ellipse at 80% 20%, rgba(193,127,74,0.04) 0%, transparent 50%);
+        }
+
+        /* SIDEBAR */
+        .sidebar {
+            width: var(--sidebar-width);
+            background: var(--bg-deep);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            height: 100vh;
+        }
+
+        .sidebar-header {
+            padding: 24px 18px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sidebar-header h2 {
+            font-family: 'Lora', serif;
+            font-size: 0.95rem;
+            font-weight: 400;
+            color: var(--text);
+            letter-spacing: 0.02em;
+        }
+
+        .sidebar-header p {
+            font-size: 0.72rem;
+            color: var(--text-soft);
+            margin-top: 3px;
+            font-weight: 300;
+        }
+
+        .new-session-btn {
+            margin: 12px 18px;
+            width: calc(100% - 36px);
+            padding: 9px 14px;
+            background: var(--accent-soft);
+            color: var(--accent);
+            border: none;
+            border-radius: 10px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            text-align: left;
+            letter-spacing: 0.02em;
+            transition: background 0.2s;
+            height: auto;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .new-session-btn:hover { background: #dfc4a0; transform: none; opacity: 1; }
+
+        .new-session-btn svg {
+            width: 13px;
+            height: 13px;
+            stroke: var(--accent);
+        }
+
+        .sessions-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px 0;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border) transparent;
+        }
+
+        .session-item {
+            padding: 10px 18px;
+            cursor: pointer;
+            border-left: 2px solid transparent;
+            transition: background 0.15s, border-color 0.15s;
+        }
+
+        .session-item:hover { background: rgba(193,127,74,0.06); }
+        .session-item.active { border-left-color: var(--accent); background: rgba(193,127,74,0.08); }
+
+        .session-date {
+            font-size: 0.7rem;
+            color: var(--text-soft);
+            font-weight: 400;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            margin-bottom: 3px;
+        }
+
+        .session-summary {
+            font-size: 0.81rem;
+            color: var(--text);
+            line-height: 1.4;
+            font-weight: 300;
+        }
+
+        .session-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 6px;
+        }
+
+        .session-action {
+            font-size: 0.7rem;
+            color: var(--accent);
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+            font-family: 'DM Sans', sans-serif;
+            font-weight: 400;
+            width: auto;
+            height: auto;
+            border-radius: 0;
+            transition: opacity 0.2s;
+        }
+
+        .session-action:hover { opacity: 0.6; transform: none; }
+
+        .no-sessions {
+            padding: 20px 18px;
+            font-size: 0.78rem;
+            color: var(--text-soft);
+            font-style: italic;
+            font-family: 'Lora', serif;
+        }
+
+        /* MODAL */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(44,36,22,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+
+        .modal-overlay.visible { opacity: 1; pointer-events: all; }
+
+        .modal {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            width: 560px;
+            max-height: 70vh;
+            display: flex;
+            flex-direction: column;
+            transform: translateY(8px);
+            transition: transform 0.2s;
+        }
+
+        .modal-overlay.visible .modal { transform: translateY(0); }
+
+        .modal-header {
+            padding: 18px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h3 {
+            font-family: 'Lora', serif;
+            font-size: 0.95rem;
+            font-weight: 400;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-soft);
+            cursor: pointer;
+            font-size: 1.3rem;
+            width: auto;
+            height: auto;
+            border-radius: 0;
+            padding: 2px 6px;
+            line-height: 1;
+        }
+
+        .modal-close:hover { opacity: 0.6; transform: none; }
+
+        .modal-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .transcript-msg { display: flex; flex-direction: column; gap: 3px; }
+
+        .transcript-role {
+            font-size: 0.68rem;
+            color: var(--text-soft);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .transcript-content {
+            font-size: 0.85rem;
+            line-height: 1.6;
+            color: var(--text);
+            font-family: 'Lora', serif;
+            padding: 10px 14px;
+            border-radius: 10px;
+            background: var(--bg-deep);
+        }
+
+        .transcript-msg.user .transcript-content {
+            background: var(--user-bubble);
+            color: var(--user-text);
+            font-family: 'DM Sans', sans-serif;
+            font-weight: 300;
+        }
+
+        /* MAIN */
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            min-width: 0;
+        }
+
+        .header {
+            padding: 22px 0 16px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .header h1 {
+            font-family: 'Lora', serif;
+            font-size: 1.2rem;
+            font-weight: 400;
+            letter-spacing: 0.02em;
+        }
+
+        .header p {
+            font-size: 0.75rem;
+            color: var(--text-soft);
+            margin-top: 3px;
+            font-weight: 300;
+            letter-spacing: 0.04em;
+        }
+
+        .divider {
+            width: 36px;
+            height: 1px;
+            background: var(--border);
+            margin: 12px auto 0;
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px 28px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border) transparent;
+        }
+
+        .message {
+            display: flex;
+            flex-direction: column;
+            animation: fadeUp 0.3s ease forwards;
+            opacity: 0;
+        }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user { align-items: flex-end; }
+        .message.assistant { align-items: flex-start; }
+
+        .bubble {
+            max-width: 80%;
+            padding: 11px 15px;
+            border-radius: 16px;
+            line-height: 1.65;
+            font-size: 0.91rem;
+        }
+
+        .message.user .bubble {
+            background: var(--user-bubble);
+            color: var(--user-text);
+            border-bottom-right-radius: 4px;
+            font-weight: 300;
+        }
+
+        .message.assistant .bubble h1,
+        .message.assistant .bubble h2,
+        .message.assistant .bubble h3 {
+            font-size: 0.95rem;
+            font-weight: 500;
+            margin-bottom: 6px;
+            margin-top: 10px;
+        }
+
+        .message.assistant .bubble strong {
+            font-weight: 500;
+        }
+
+        .message.assistant .bubble hr {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 10px 0;
+        }
+
+        .message.assistant .bubble ul,
+        .message.assistant .bubble ol {
+            padding-left: 18px;
+            margin-bottom: 8px;
+        }
+
+        .message.assistant .bubble li {
+            margin-bottom: 4px;
+        }
+
+        .message.assistant .bubble {
+            background: var(--surface);
+            color: var(--text);
+            border-bottom-left-radius: 4px;
+            border: 1px solid var(--border);
+            font-family: 'Lora', serif;
+            font-size: 0.9rem;
+        }
+
+        .message.assistant .bubble p { margin-bottom: 8px; }
+        .message.assistant .bubble p:last-child { margin-bottom: 0; }
+
+        .label {
+            font-size: 0.68rem;
+            color: var(--text-soft);
+            margin-bottom: 4px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        .typing {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 13px 16px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            border-bottom-left-radius: 4px;
+            width: fit-content;
+        }
+
+        .typing span {
+            width: 5px;
+            height: 5px;
+            background: var(--text-soft);
+            border-radius: 50%;
+            animation: bounce 1.2s infinite;
+        }
+
+        .typing span:nth-child(2) { animation-delay: 0.2s; }
+        .typing span:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes bounce {
+            0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+            30% { transform: translateY(-4px); opacity: 1; }
+        }
+
+        .input-area {
+            padding: 14px 28px 22px;
+            flex-shrink: 0;
+        }
+
+        .input-wrap {
+            display: flex;
+            align-items: flex-end;
+            gap: 10px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 10px 10px 10px 16px;
+            transition: border-color 0.2s;
+        }
+
+        .input-wrap:focus-within { border-color: var(--accent); }
+
+        textarea {
+            flex: 1;
+            border: none;
+            background: transparent;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.91rem;
+            color: var(--text);
+            resize: none;
+            outline: none;
+            max-height: 120px;
+            line-height: 1.5;
+            font-weight: 300;
+        }
+
+        textarea::placeholder { color: var(--text-soft); }
+
+        button {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            border: none;
+            background: var(--user-bubble);
+            color: var(--user-text);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: opacity 0.2s, transform 0.15s;
+        }
+
+        button:hover { opacity: 0.85; transform: scale(1.05); }
+        button:active { transform: scale(0.97); }
+        button svg { width: 15px; height: 15px; }
+
+        .empty-state {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .empty-state p {
+            font-family: 'Lora', serif;
+            font-style: italic;
+            font-size: 0.92rem;
+            color: var(--text-soft);
+            text-align: center;
+            line-height: 1.7;
+            opacity: 0.6;
+        }
+
+        .suggestions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+            margin-top: 6px;
+        }
+
+        .suggestion {
+            background: var(--accent-soft);
+            color: var(--accent);
+            border: none;
+            border-radius: 20px;
+            padding: 7px 14px;
+            font-size: 0.78rem;
+            font-family: 'DM Sans', sans-serif;
+            cursor: pointer;
+            width: auto;
+            height: auto;
+            font-weight: 400;
+            transition: background 0.2s;
+        }
+
+        .suggestion:hover { background: #dfc4a0; transform: none; opacity: 1; }
+    </style>
+</head>
+<body>
+
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h2>past sessions</h2>
+            <p>your writing history</p>
+        </div>
+        <button class="new-session-btn" onclick="startNewSession()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            new session
+        </button>
+        <div class="sessions-list" id="sessionsList">
+            <div class="no-sessions">no past sessions yet</div>
+        </div>
+    </div>
+
+    <div class="main">
+        <div class="header">
+            <h1>your space</h1>
+            <p>let's figure out what you want to say today</p>
+            <div class="divider"></div>
+        </div>
+
+        <div class="messages" id="messages">
+            <div class="empty-state" id="emptyState">
+                <p>what's on your mind?<br>or just tell me how you're feeling.</p>
+                <div class="suggestions">
+                    <button class="suggestion" onclick="suggest('I have no idea what to write about today')">I have nothing today</button>
+                    <button class="suggestion" onclick="suggest('I have a rough draft I want to refine')">refine a draft</button>
+                    <button class="suggestion" onclick="suggest('I have a vague idea but I\'m not sure where to go with it')">I have a vague idea</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="input-area">
+            <div class="input-wrap">
+                <textarea
+                    id="input"
+                    placeholder="say something..."
+                    rows="1"
+                    onkeydown="handleKey(event)"
+                    oninput="autoResize(this)"
+                ></textarea>
+                <button onclick="sendMessage()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modalTitle">session transcript</h3>
+                <button class="modal-close" onclick="closeModalDirect()">×</button>
+            </div>
+            <div class="modal-body" id="modalBody"></div>
+        </div>
+    </div>
+
+    <script>
+        const messagesEl = document.getElementById('messages');
+        const inputEl = document.getElementById('input');
+        let currentSessionId = null;
+
+        async function init() {
+            const res = await fetch('/sessions/current');
+            const data = await res.json();
+            currentSessionId = data.session_id;
+            await loadSessions();
+        }
+
+        async function loadSessions() {
+            const res = await fetch('/sessions');
+            const sessions = await res.json();
+            const list = document.getElementById('sessionsList');
+
+            if (!sessions.length) {
+                list.innerHTML = '<div class="no-sessions">no past sessions yet</div>';
+                return;
+            }
+
+            list.innerHTML = sessions.map(s => {
+                const date = new Date(s.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                const isActive = s.id === currentSessionId;
+                return `
+                    <div class="session-item ${isActive ? 'active' : ''}">
+                        <div class="session-date">${date}</div>
+                        <div class="session-summary">${s.summary}</div>
+                        <div class="session-actions">
+                            <button class="session-action" onclick="viewTranscript(${s.id}, '${date}')">view transcript</button>
+                            ${!isActive ? `<button class="session-action" onclick="continueSession(${s.id})">continue</button>` : ''}
+                        </div>
+                    </div>`;
+            }).join('');
+        }
+
+        async function startNewSession() {
+            const res = await fetch('/sessions/new', { method: 'POST' });
+            const data = await res.json();
+            currentSessionId = data.session_id;
+            messagesEl.innerHTML = '';
+            messagesEl.appendChild(createEmptyState());
+            await loadSessions();
+        }
+
+        async function continueSession(sessionId) {
+            await fetch(`/sessions/${sessionId}/continue`, { method: 'POST' });
+            currentSessionId = sessionId;
+            messagesEl.innerHTML = '';
+
+            const res = await fetch(`/sessions/${sessionId}/messages`);
+            const msgs = await res.json();
+
+            if (!msgs.length) {
+                messagesEl.appendChild(createEmptyState());
+            } else {
+                msgs.forEach(m => addMessage(m.role, m.content, false));
+            }
+
+            await loadSessions();
+        }
+
+        function createEmptyState() {
+            const div = document.createElement('div');
+            div.className = 'empty-state';
+            div.id = 'emptyState';
+            div.innerHTML = `
+                <p>what's on your mind?<br>or just tell me how you're feeling.</p>
+                <div class="suggestions">
+                    <button class="suggestion" onclick="suggest('I have no idea what to write about today')">I have nothing today</button>
+                    <button class="suggestion" onclick="suggest('I have a rough draft I want to refine')">refine a draft</button>
+                    <button class="suggestion" onclick="suggest('I have a vague idea but I\\'m not sure where to go with it')">I have a vague idea</button>
+                </div>`;
+            return div;
+        }
+
+        async function viewTranscript(sessionId, date) {
+            const res = await fetch(`/sessions/${sessionId}/messages`);
+            const msgs = await res.json();
+
+            document.getElementById('modalTitle').textContent = `session — ${date}`;
+            const body = document.getElementById('modalBody');
+
+            if (!msgs.length) {
+                body.innerHTML = '<p style="color:var(--text-soft);font-size:0.85rem;">no messages in this session.</p>';
+            } else {
+                body.innerHTML = msgs.map(m => `
+                    <div class="transcript-msg ${m.role}">
+                        <div class="transcript-role">${m.role}</div>
+                        <div class="transcript-content">${m.content}</div>
+                    </div>`).join('');
+            }
+
+            document.getElementById('modalOverlay').classList.add('visible');
+        }
+
+        function closeModal(e) {
+            if (e.target === document.getElementById('modalOverlay')) closeModalDirect();
+        }
+
+        function closeModalDirect() {
+            document.getElementById('modalOverlay').classList.remove('visible');
+        }
+
+        function autoResize(el) {
+            el.style.height = 'auto';
+            el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+        }
+
+        function handleKey(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        }
+
+        function suggest(text) {
+            inputEl.value = text;
+            sendMessage();
+        }
+
+        function addMessage(role, text, animate = true) {
+            const empty = document.getElementById('emptyState');
+            if (empty) empty.remove();
+
+            const msg = document.createElement('div');
+            msg.className = `message ${role}`;
+            if (!animate) { msg.style.animation = 'none'; msg.style.opacity = '1'; }
+
+            const label = document.createElement('div');
+            label.className = 'label';
+            label.textContent = role === 'user' ? 'you' : 'assistant';
+
+            const bubble = document.createElement('div');
+            bubble.className = 'bubble';
+
+            if (role === 'assistant') {
+                bubble.innerHTML = marked.parse(text);
+            } else {
+                bubble.textContent = text;
+            }
+
+            msg.appendChild(label);
+            msg.appendChild(bubble);
+            messagesEl.appendChild(msg);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        function showTyping() {
+            const typing = document.createElement('div');
+            typing.className = 'message assistant';
+            typing.id = 'typing';
+            typing.innerHTML = `
+                <div class="label">assistant</div>
+                <div class="typing"><span></span><span></span><span></span></div>`;
+            messagesEl.appendChild(typing);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        function removeTyping() {
+            const t = document.getElementById('typing');
+            if (t) t.remove();
+        }
+
+        async function sendMessage() {
+            const text = inputEl.value.trim();
+            if (!text) return;
+
+            addMessage('user', text);
+            inputEl.value = '';
+            inputEl.style.height = 'auto';
+            showTyping();
+
+            try {
+                const res = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: text })
+                });
+                const data = await res.json();
+                removeTyping();
+                addMessage('assistant', data.response);
+                await loadSessions();
+            } catch {
+                removeTyping();
+                addMessage('assistant', 'something went wrong, try again.');
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
