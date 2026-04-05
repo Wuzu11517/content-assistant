@@ -1,0 +1,8 @@
+anthropic
+notion-client==2.2.1
+python-dotenv
+fastapi
+uvicorn
+python-multipart
+requests
+beautifulsoup4
