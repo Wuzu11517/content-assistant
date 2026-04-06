@@ -126,6 +126,8 @@ SYSTEM_PROMPT = """You are a warm, attentive content assistant helping someone p
 
 You have direct access to their Notion database of scripts through your tools. When they reference a specific day like "Day 26" you can and should use read_draft to read it directly — do not tell them you can't access their scripts.
 
+When you refine or restructure a script, ALWAYS show the full refined content in your response. Never just say you did it — paste the actual result so the user can read and approve it before anything gets saved to Notion. Only call write_draft or update_page after showing the content and the user confirms they want to save it.
+
 You have these tools available:
 - inspire: when they have nothing to write about
 - unstuck: when they have a vague idea but need help developing it
@@ -175,6 +177,7 @@ async def chat(body: Message):
     history = get_history(current_session_id)
     save_message(current_session_id, "user", body.message)
 
+    # build clean messages list for this turn only
     messages = history + [{"role": "user", "content": body.message}]
 
     response = anthropic_client.messages.create(
@@ -186,6 +189,7 @@ async def chat(body: Message):
     )
 
     while response.stop_reason == "tool_use":
+        # extract just the tool_use block
         tool_call = next(b for b in response.content if b.type == "tool_use")
         tool_name = tool_call.name
         tool_input = tool_call.input
@@ -199,25 +203,42 @@ async def chat(body: Message):
         elif tool_name == "read_page":
             title = tool_input.get("title") or tool_input.get("day")
             source = tool_input.get("source", "blocks")
-            result = read_page(f"Day {title}" if title.isdigit() else title, source)
+            result = read_page(f"Day {title}" if str(title).isdigit() else title, source)
         elif tool_name == "update_page":
             title = tool_input.get("title") or tool_input.get("day")
-            result = update_page(f"Day {title}" if title.isdigit() else title, tool_input["fields"])
+            result = update_page(f"Day {title}" if str(title).isdigit() else title, tool_input["fields"])
         elif tool_name == "create_page":
             title = tool_input.get("title") or tool_input.get("day")
-            result = create_page(f"Day {title}" if title.isdigit() else title, tool_input["script"])
+            result = create_page(f"Day {title}" if str(title).isdigit() else title, tool_input["script"])
+        elif tool_name == "update_profile":
+            result = update_static(tool_input["field"], tool_input["value"], tool_input.get("action", "update"))
         else:
             result = "Unknown tool"
 
-        messages.append({"role": "assistant", "content": response.content})
-        messages.append({
-            "role": "user",
-            "content": [{
-                "type": "tool_result",
-                "tool_use_id": tool_call.id,
-                "content": result
-            }]
-        })
+        # append as a properly paired exchange
+        messages = messages + [
+            {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "id": tool_call.id,
+                        "name": tool_call.name,
+                        "input": tool_call.input
+                    }
+                ]
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": tool_call.id,
+                        "content": str(result)
+                    }
+                ]
+            }
+        ]
 
         response = anthropic_client.messages.create(
             model="claude-haiku-4-5",
