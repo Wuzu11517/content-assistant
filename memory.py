@@ -136,18 +136,24 @@ One sentence only, past tense, no preamble."""
     conn.commit()
     conn.close()
 
-def save_message(session_id: int, role: str, content: str):
+def save_message(session_id: int, role: str, content):
+    # if content is a list (tool use blocks) extract only text
+    if isinstance(content, list):
+        text = " ".join([b.text for b in content if hasattr(b, "text")])
+    else:
+        text = content
+    
+    if not text.strip():
+        return
+    
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO messages (session_id, role, content, timestamp) VALUES (?, ?, ?, ?)",
-        (session_id, role, content, datetime.now().isoformat())
+        "INSERT INTO messages (session_id, role, content, timestamp, compressed) VALUES (?, ?, ?, ?, 0)",
+        (session_id, role, text, datetime.now().isoformat())
     )
     conn.commit()
     conn.close()
-
-    if get_message_count(session_id) > MESSAGE_THRESHOLD:
-        compress_old_messages(session_id)
 
 def get_message_count(session_id: int) -> int:
     conn = sqlite3.connect(DB_PATH)
