@@ -2,12 +2,56 @@ import os
 import anthropic
 from notion_client import Client
 from dotenv import load_dotenv
+from user_profile import load_profile, save_profile
 
 load_dotenv()
 
 notion = Client(auth=os.getenv("NOTION_API_KEY"))
 anthropic_client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 SCRIPTS_DB = os.getenv("NOTION_DEST_DATABASE_ID")
+
+def analyze_voice():
+    summaries = get_script_summaries()
+    
+    # read all scripts at once
+    all_scripts = ""
+    for s in summaries:
+        content = get_full_script(s["id"])
+        all_scripts += f"\n\n--- {s['title']} ---\n{content}"
+    
+    response = anthropic_client.messages.create(
+        model="claude-haiku-4-5",
+        max_tokens=1000,
+        messages=[{
+            "role": "user",
+            "content": f"""Analyze these journal scripts and extract the writer's voice patterns.
+
+{all_scripts}
+
+Return ONLY a JSON object with this exact structure, no markdown:
+{{
+    "sentence_style": "description of typical sentence length and structure",
+    "common_patterns": ["pattern 1", "pattern 2", "pattern 3"],
+    "never": ["thing they never do 1", "thing they never do 2"],
+    "voice": "one sentence describing their overall voice",
+    "delivery": "one sentence describing how they construct and deliver thoughts",
+    "tone": "one sentence describing their emotional tone"
+}}
+
+Be specific — extract actual patterns from the text, not generic observations."""
+        }]
+    )
+
+    import json
+    import re
+    text = re.sub(r"```json|```", "", response.content[0].text).strip()
+    extracted = json.loads(text)
+
+    profile = load_profile()
+    profile["static"].update(extracted)
+    save_profile(profile)
+    
+    return "Voice analysis complete — profile updated"
 
 def get_script_summaries() -> list:
     response = notion.databases.query(database_id=SCRIPTS_DB)
@@ -113,46 +157,38 @@ Based on their voice and history:
     
     return response.content[0].text
 
-def refine(draft: str, restructure: bool = False):
-    summaries = get_script_summaries()
-    
-    # find 3 most relevant scripts by matching themes in the draft
-    response = anthropic_client.messages.create(
-        model="claude-haiku-4-5",
-        max_tokens=100,
-        messages=[{
-            "role": "user",
-            "content": f"""Given this draft: "{draft}"
-            
-And these scripts with their themes:
-{chr(10).join([f"{s['title']}: {', '.join(s['themes'])}" for s in summaries])}
+def refine(draft: str, restructure: bool = False) -> str:
+    profile = load_profile()
+    static = profile["static"]
+    dynamic = profile["dynamic"]
 
-Return only the titles of the 3 most thematically similar scripts, comma separated, nothing else."""
-        }]
-    )
-    
-    similar_titles = [t.strip() for t in response.content[0].text.split(",")]
-    similar_scripts = [
-        get_full_script(s["id"]) 
-        for s in summaries 
-        if s["title"] in similar_titles
-    ]
-    
-    voice_context = "\n\n---\n\n".join(similar_scripts)
-    
-    mode_instruction = """Restructure and reframe this idea if it isn't coming through clearly. 
-    You can change the structure significantly but keep the core idea and their voice.""" if restructure else \
-    """Polish this draft lightly — tighten sentences, improve word choice, cut rambling. 
-    Keep their structure and voice intact. Don't over-edit."""
-    
+    voice_context = f"""
+Voice: {static['voice']}
+Delivery: {static['delivery']}
+Tone: {static['tone']}
+Sentence style: {static['sentence_style']}
+Common patterns: {', '.join(static['common_patterns'])}
+Never do: {', '.join(static['never'])}
+"""
+
+    if dynamic.get("emotional_arc"):
+        voice_context += f"Current emotional arc: {dynamic['emotional_arc']}\n"
+    if dynamic.get("energy"):
+        voice_context += f"Current energy: {dynamic['energy']}\n"
+
+    mode_instruction = """Restructure and reframe this idea if it isn't coming through clearly.
+You can change the structure significantly but keep the core idea and their voice.""" if restructure else \
+    """Polish this draft lightly — tighten sentences, improve word choice, cut rambling.
+Keep their structure and voice intact. Do not over-edit."""
+
     response = anthropic_client.messages.create(
         model="claude-haiku-4-5",
         max_tokens=1000,
         messages=[{
             "role": "user",
-            "content": f"""You are a content assistant helping someone refine their personal reflection video scripts.
+            "content": f"""You are helping someone refine their personal reflection video scripts.
 
-Here are examples of their writing style and voice:
+Here is exactly how they write — match this precisely:
 {voice_context}
 
 Their draft:
@@ -160,10 +196,10 @@ Their draft:
 
 {mode_instruction}
 
-Return only the refined script, nothing else."""
+Return only the refined script, nothing else. Do not add formal language, dramatic conclusions, or anything that doesn't match their voice profile above."""
         }]
     )
-    
+
     return response.content[0].text
 
 def read_page(title: str, source: str = "blocks") -> str:
